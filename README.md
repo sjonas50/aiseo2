@@ -99,8 +99,8 @@ PERPLEXITY_API_KEY=pplx-your-perplexity-key-here
 GOOGLE_API_KEY=your-google-key-here
 
 # Optional: Model configurations (defaults shown)
-OPENAI_MODEL=gpt-4o-mini
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+OPENAI_MODEL=gpt-4.1
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
 PERPLEXITY_MODEL=llama-3.1-sonar-small-128k-online
 GOOGLE_MODEL=gemini-2.5-flash  # Latest Gemini model
 
@@ -115,7 +115,7 @@ GOOGLE_SEARCH_CX=your-custom-search-engine-id-here
 
 # AI Analysis Settings (for run.py only)
 ANALYZE_RESPONSES=true  # Enable AI-powered analysis
-ANALYSIS_MODEL=gpt-4  # Uses your OpenAI API key
+ANALYSIS_MODEL=gpt-4.1  # Uses your OpenAI API key
 ANALYSIS_CSV_PATH=analysis_results.csv  # Where to save insights
 ```
 

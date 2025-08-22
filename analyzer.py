@@ -14,7 +14,7 @@ import re
 class ResponseAnalyzer:
     def __init__(self):
         self.csv_path = os.getenv('ANALYSIS_CSV_PATH', 'analysis_results.csv')
-        self.analysis_model = os.getenv('ANALYSIS_MODEL', 'gpt-4')
+        self.analysis_model = os.getenv('ANALYSIS_MODEL', 'gpt-4.1')
         self.api_key = os.getenv('OPENAI_API_KEY')
         self.analyze_enabled = os.getenv('ANALYZE_RESPONSES', 'false').lower() == 'true'
         
@@ -93,7 +93,7 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
                     {"role": "system", "content": "You are an AI optimization expert analyzing responses for AISEO insights. Always return valid JSON."},
                     {"role": "user", "content": analysis_prompt}
                 ],
-                max_tokens=1000,
+                max_tokens=4000,
                 temperature=0.3,  # Lower temperature for more consistent analysis
                 response_format={"type": "json_object"}  # Force JSON response
             )
