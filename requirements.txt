@@ -1,0 +1,13 @@
+# Core dependencies for Multi-LLM Query Tool
+openai>=1.0.0
+anthropic>=0.64.0  # Minimum version to avoid httpx compatibility issues
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Google Gemini API - Install the new SDK
+google-genai>=1.0.0
+
+# Note: If you have issues with google-genai, you can use the legacy library instead:
+# google-generativeai>=0.8.0
+
+# The script automatically detects which is installed

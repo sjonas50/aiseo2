@@ -1,0 +1,46 @@
+# Environment variables - NEVER commit API keys!
+.env
+.env.local
+.env.*.local
+
+# Test results and analysis data
+llm_test_results_*.json
+analysis_results.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+*_backup.*
+
+# Personal notes
+notes.txt
+TODO.txt
+personal_notes/
