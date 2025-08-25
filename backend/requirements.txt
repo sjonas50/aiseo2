@@ -1,0 +1,12 @@
+# Backend requirements for AISEO API
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.0
+python-socketio>=5.10.0
+python-dotenv>=1.0.0
+
+# Include existing requirements
+openai>=1.0.0
+anthropic>=0.64.0
+requests>=2.31.0
+google-genai>=1.0.0

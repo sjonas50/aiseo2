@@ -1,0 +1,16 @@
+{
+  "name": "aiseo-query-tool",
+  "version": "1.0.0",
+  "description": "Multi-LLM Query Tool with Frontend UI",
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && python3 app.py",
+    "frontend": "cd frontend && npm run dev",
+    "install-backend": "cd backend && pip3 install -r requirements.txt",
+    "install-frontend": "cd frontend && npm install",
+    "install-all": "npm run install-backend && npm run install-frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
