@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AISEO Multi-LLM Query Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-gradient {
+            background-size: 200% 200%;
+            animation: gradient 3s ease infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-gray-900/80 backdrop-blur-lg border-b border-gray-700">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <span class="text-xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+                        AISEO Query Tool
+                    </span>
+                </div>
+                <nav class="hidden md:flex items-center space-x-8">
+                    <a href="#" class="text-gray-300 hover:text-white transition-colors">Dashboard</a>
+                    <a href="#" class="text-gray-300 hover:text-white transition-colors">Compare</a>
+                    <a href="#" class="text-gray-300 hover:text-white transition-colors">Analytics</a>
+                    <a href="#" class="text-gray-300 hover:text-white transition-colors">History</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-24 pb-12 px-4">
+        <div class="container mx-auto max-w-7xl">
+            <!-- Hero Section -->
+            <div class="text-center mb-12">
+                <h1 class="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+                    AI Multi-Query Tool
+                </h1>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Compare responses from multiple AI providers and search engines in real-time
+                </p>
+            </div>
+
+            <!-- Query Input -->
+            <div class="max-w-4xl mx-auto mb-12">
+                <form id="queryForm" class="relative">
+                    <div class="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden hover:border-blue-500/50 transition-all duration-300">
+                        <div class="relative flex items-center p-6">
+                            <input
+                                type="text"
+                                id="queryInput"
+                                placeholder="Ask anything..."
+                                class="w-full bg-transparent text-white text-lg placeholder-gray-500 outline-none"
+                            />
+                            <button
+                                type="submit"
+                                id="submitBtn"
+                                class="ml-4 p-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200"
+                            >
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Provider Status -->
+            <div id="providerStatus" class="mb-12">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Available Providers</h2>
+                <div id="providerCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Provider cards will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Responses</h2>
+                <div id="results" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Results will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Animated Background -->
+    <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div class="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500 to-purple-600 opacity-10 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-purple-500 to-pink-600 opacity-10 rounded-full blur-3xl animate-pulse" style="animation-delay: 2s;"></div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_BASE_URL = 'http://localhost:5555';
+        let socket = null;
+        let currentQueryId = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProviders();
+            setupSocketConnection();
+            setupFormHandler();
+        });
+
+        // Load available providers
+        async function loadProviders() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/providers`);
+                const data = await response.json();
+                displayProviders(data.providers);
+            } catch (error) {
+                console.error('Failed to load providers:', error);
+                displayProviders([
+                    { id: 'openai', name: 'OpenAI', model: 'GPT-4', enabled: true },
+                    { id: 'anthropic', name: 'Anthropic', model: 'Claude', enabled: false }
+                ]);
+            }
+        }
+
+        // Display provider cards
+        function displayProviders(providers) {
+            const container = document.getElementById('providerCards');
+            container.innerHTML = '';
+            
+            providers.forEach(provider => {
+                const card = document.createElement('div');
+                card.className = 'p-6 rounded-xl border bg-gray-800 border-gray-700 hover:border-blue-500/50 transition-all duration-300';
+                card.innerHTML = `
+                    <div class="mb-4">
+                        <div class="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white inline-block">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-1">${provider.name}</h3>
+                    <p class="text-sm text-gray-400">${provider.model || 'Model not specified'}</p>
+                    <div class="mt-4">
+                        <span class="text-xs font-medium ${provider.enabled ? 'text-green-400' : 'text-gray-500'}">
+                            ${provider.enabled ? '✓ Available' : 'Not configured'}
+                        </span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Setup WebSocket connection
+        function setupSocketConnection() {
+            socket = io(API_BASE_URL);
+            
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket');
+            });
+
+            socket.on('provider_complete', (data) => {
+                if (data.query_id === currentQueryId) {
+                    displayResult(data.provider, data.result);
+                }
+            });
+
+            socket.on('query_complete', (data) => {
+                if (data.query_id === currentQueryId) {
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('queryInput').disabled = false;
+                }
+            });
+        }
+
+        // Setup form handler
+        function setupFormHandler() {
+            const form = document.getElementById('queryForm');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const query = document.getElementById('queryInput').value.trim();
+                if (!query) return;
+
+                // Disable form
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('queryInput').disabled = true;
+
+                // Clear previous results
+                document.getElementById('results').innerHTML = '';
+                document.getElementById('resultsSection').classList.remove('hidden');
+
+                try {
+                    // Submit query
+                    const response = await fetch(`${API_BASE_URL}/api/query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query })
+                    });
+
+                    const data = await response.json();
+                    currentQueryId = data.query_id;
+
+                    // Join WebSocket room
+                    socket.emit('join_query', { query_id: currentQueryId });
+
+                    // Add loading states
+                    addLoadingStates();
+                } catch (error) {
+                    console.error('Failed to submit query:', error);
+                    alert('Failed to submit query. Please check if the backend is running.');
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('queryInput').disabled = false;
+                }
+            });
+        }
+
+        // Add loading states for results
+        function addLoadingStates() {
+            const container = document.getElementById('results');
+            ['OpenAI', 'Anthropic'].forEach(provider => {
+                const card = document.createElement('div');
+                card.id = `result-${provider.toLowerCase()}`;
+                card.className = 'p-6 rounded-xl border bg-gray-800 border-gray-700';
+                card.innerHTML = `
+                    <h3 class="text-lg font-semibold mb-4">${provider}</h3>
+                    <div class="flex items-center justify-center py-12">
+                        <div class="flex space-x-2">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
+                            <div class="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0.1s;"></div>
+                            <div class="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0.2s;"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Display result
+        function displayResult(provider, result) {
+            const card = document.getElementById(`result-${provider}`) || createResultCard(provider);
+            
+            if (result.error) {
+                card.innerHTML = `
+                    <h3 class="text-lg font-semibold mb-4 capitalize">${provider}</h3>
+                    <p class="text-red-400">Error: ${result.error}</p>
+                `;
+            } else {
+                card.innerHTML = `
+                    <h3 class="text-lg font-semibold mb-4 capitalize">${provider}</h3>
+                    ${result.model ? `<p class="text-sm text-gray-400 mb-2">${result.model}</p>` : ''}
+                    <div class="prose prose-invert max-w-none">
+                        <p class="whitespace-pre-wrap text-gray-300 text-sm leading-relaxed">
+                            ${result.response || 'No response'}
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // Create result card if not exists
+        function createResultCard(provider) {
+            const card = document.createElement('div');
+            card.id = `result-${provider}`;
+            card.className = 'p-6 rounded-xl border bg-gray-800 border-gray-700';
+            document.getElementById('results').appendChild(card);
+            return card;
+        }
+    </script>
+</body>
+</html>

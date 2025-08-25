@@ -44,4 +44,4 @@ tmp/
 # Personal notes
 notes.txt
 TODO.txt
-personal_notes/
+personal_notes/node_modules/

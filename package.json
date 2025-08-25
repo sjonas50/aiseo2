@@ -11,6 +11,8 @@
     "install-all": "npm run install-backend && npm run install-frontend"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@vitejs/plugin-react": "^4.1.0",
+    "concurrently": "^8.2.2",
+    "vite": "^4.5.0"
   }
 }
