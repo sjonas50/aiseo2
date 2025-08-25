@@ -8,6 +8,8 @@ import os
 import sys
 import json
 import time
+import argparse
+import re
 from datetime import datetime
 from analyzer import ResponseAnalyzer
 
@@ -488,32 +490,69 @@ class FixedLLMTester:
             print("5. For Google: Enable Generative AI API in Google Cloud Console")
 
 
-# Main execution
-if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print("STARTING TESTS")
-    print("=" * 60 + "\n")
+def load_questions(filename='questions.txt'):
+    """Load questions from a file"""
+    if not os.path.exists(filename):
+        return []
     
-    # Get test prompt
-    test_prompt = input("Enter a test prompt (or press Enter for default): ").strip()
-    if not test_prompt:
-        test_prompt = "What is 2+2? Answer in one sentence."
-        print(f"Using default prompt: '{test_prompt}'")
+    with open(filename, 'r') as f:
+        questions = [line.strip() for line in f if line.strip()]
+    
+    return questions
+
+def create_slug(text, max_length=50):
+    """Create a filesystem-safe slug from text"""
+    # Remove special characters and replace spaces with underscores
+    slug = re.sub(r'[^\w\s-]', '', text.lower())
+    slug = re.sub(r'[-\s]+', '_', slug)
+    # Truncate to max length
+    return slug[:max_length]
+
+def select_questions_interactive(questions):
+    """Show numbered list and let user select"""
+    print("\nAvailable questions:")
+    print("-" * 40)
+    for i, q in enumerate(questions, 1):
+        print(f"{i}. {q}")
+    print(f"{len(questions) + 1}. Run all questions")
+    print(f"{len(questions) + 2}. Enter custom question")
+    print()
+    
+    while True:
+        try:
+            choice = input("Select question number (or 'q' to quit): ").strip()
+            if choice.lower() == 'q':
+                return None
+            
+            choice_num = int(choice)
+            if choice_num == len(questions) + 1:
+                return questions  # Run all
+            elif choice_num == len(questions) + 2:
+                custom = input("Enter your question: ").strip()
+                return [custom] if custom else None
+            elif 1 <= choice_num <= len(questions):
+                return [questions[choice_num - 1]]
+            else:
+                print("Invalid selection. Please try again.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+def run_single_query(tester, query, analyzer=None, save_individual=True):
+    """Run a single query and return results"""
+    print(f"\nQuery: {query}")
+    print("-" * 60)
     
     # Run tests
-    tester = FixedLLMTester()
-    results = tester.test_all(test_prompt)
+    results = tester.test_all(query)
     
     # Display results
     tester.display_results(results)
     
-    # Analyze responses for AISEO insights
-    if os.getenv('ANALYZE_RESPONSES', 'false').lower() == 'true':
+    # Analyze if enabled
+    if analyzer and os.getenv('ANALYZE_RESPONSES', 'false').lower() == 'true':
         print("\n" + "=" * 60)
         print("ANALYZING RESPONSES FOR AISEO INSIGHTS")
         print("=" * 60)
-        
-        analyzer = ResponseAnalyzer()
         
         for result in results:
             # Skip Google Search results - only analyze LLM responses
@@ -524,7 +563,7 @@ if __name__ == "__main__":
                 # Analyze the response
                 analysis = analyzer.analyze_with_ai(
                     result['response'],
-                    test_prompt,
+                    query,
                     result['provider']
                 )
                 
@@ -537,28 +576,141 @@ if __name__ == "__main__":
                     
                     # Display insights
                     analyzer.display_insights(analysis)
-        
-        print(f"\n[OK] Analysis results saved to: {analyzer.csv_path}")
     
-    # Save results to file
+    # Save results if requested
+    if save_individual:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        slug = create_slug(query)
+        
+        # Create results directory if it doesn't exist
+        os.makedirs('results', exist_ok=True)
+        
+        filename = f"results/llm_results_{slug}_{timestamp}.json"
+        
+        output_data = {
+            'query': query,
+            'timestamp': datetime.now().isoformat(),
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'time': datetime.now().strftime('%H:%M:%S'),
+            'results': results
+        }
+        
+        with open(filename, 'w') as f:
+            json.dump(output_data, f, indent=2, default=str)
+        
+        print(f"\nResults saved to: {filename}")
+    
+    return results
+
+# Main execution
+if __name__ == "__main__":
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Multi-LLM Query Testing Tool')
+    parser.add_argument('--query', '-q', type=str, help='Single query to test')
+    parser.add_argument('--batch', '-b', action='store_true', help='Run all questions from questions.txt')
+    parser.add_argument('--select', '-s', action='store_true', help='Select questions interactively')
+    parser.add_argument('--file', '-f', type=str, default='questions.txt', help='Questions file to use (default: questions.txt)')
+    
+    args = parser.parse_args()
+    
     print("\n" + "=" * 60)
-    print("SAVING RESULTS")
+    print("STARTING TESTS")
     print("=" * 60 + "\n")
     
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"llm_test_results_{timestamp}.json"
+    # Initialize tester and analyzer
+    tester = FixedLLMTester()
+    analyzer = ResponseAnalyzer() if os.getenv('ANALYZE_RESPONSES', 'false').lower() == 'true' else None
     
-    # Create enhanced output with metadata
-    output_data = {
-        'query': test_prompt,
-        'timestamp': datetime.now().isoformat(),
-        'date': datetime.now().strftime('%Y-%m-%d'),
-        'time': datetime.now().strftime('%H:%M:%S'),
-        'results': results
-    }
+    queries_to_run = []
     
-    with open(filename, 'w') as f:
-        json.dump(output_data, f, indent=2, default=str)
+    # Determine which mode to run
+    if args.query:
+        # Single query from command line
+        queries_to_run = [args.query]
+        print(f"Running single query: {args.query}")
+        
+    elif args.batch:
+        # Batch mode - run all questions from file
+        questions = load_questions(args.file)
+        if not questions:
+            print(f"[ERROR] No questions found in {args.file}")
+            print("\nPlease create a questions file with one question per line.")
+            sys.exit(1)
+        
+        queries_to_run = questions
+        print(f"Batch mode: Running {len(questions)} questions from {args.file}")
+        
+    elif args.select:
+        # Select mode - interactive selection
+        questions = load_questions(args.file)
+        if not questions:
+            print(f"[WARNING] No questions found in {args.file}")
+            custom = input("Enter your question: ").strip()
+            queries_to_run = [custom] if custom else []
+        else:
+            selected = select_questions_interactive(questions)
+            if selected is None:
+                print("Exiting...")
+                sys.exit(0)
+            queries_to_run = selected
+            
+    else:
+        # Default interactive mode (backward compatible)
+        test_prompt = input("Enter a test prompt (or press Enter for default): ").strip()
+        if not test_prompt:
+            test_prompt = "What is 2+2? Answer in one sentence."
+            print(f"Using default prompt: '{test_prompt}'")
+        queries_to_run = [test_prompt]
     
-    print(f"Results saved to: {filename}")
+    # Check if we have queries to run
+    if not queries_to_run:
+        print("[ERROR] No queries to run.")
+        sys.exit(1)
+    
+    # Run queries
+    all_results = []
+    
+    if len(queries_to_run) == 1:
+        # Single query
+        results = run_single_query(tester, queries_to_run[0], analyzer, save_individual=True)
+        all_results.append({'query': queries_to_run[0], 'results': results})
+        
+    else:
+        # Multiple queries
+        print(f"\n[INFO] Running {len(queries_to_run)} queries...")
+        print("=" * 60)
+        
+        for i, query in enumerate(queries_to_run, 1):
+            print(f"\n[{i}/{len(queries_to_run)}] Processing query...")
+            results = run_single_query(tester, query, analyzer, save_individual=True)
+            all_results.append({'query': query, 'results': results})
+            
+            # Add a small delay between queries to avoid rate limiting
+            if i < len(queries_to_run):
+                time.sleep(2)
+        
+        # Save batch summary
+        print("\n" + "=" * 60)
+        print("SAVING BATCH SUMMARY")
+        print("=" * 60 + "\n")
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        os.makedirs('results', exist_ok=True)
+        summary_filename = f"results/batch_summary_{timestamp}.json"
+        
+        summary_data = {
+            'batch_timestamp': datetime.now().isoformat(),
+            'total_queries': len(queries_to_run),
+            'queries_run': queries_to_run,
+            'all_results': all_results
+        }
+        
+        with open(summary_filename, 'w') as f:
+            json.dump(summary_data, f, indent=2, default=str)
+        
+        print(f"Batch summary saved to: {summary_filename}")
+    
+    if analyzer:
+        print(f"\n[OK] Analysis results saved to: {analyzer.csv_path}")
+    
     print("\n[OK] Testing complete!")

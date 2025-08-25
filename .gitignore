@@ -6,6 +6,7 @@
 # Test results and analysis data
 llm_test_results_*.json
 analysis_results.csv
+results/
 
 # Python
 __pycache__/

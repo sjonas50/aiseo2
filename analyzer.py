@@ -62,7 +62,15 @@ Extract the following information in JSON format:
 2. mention_reasons: For each company, why was it mentioned? (features, authority, popularity, etc.)
 3. authority_signals: Authority phrases used (e.g., "leading", "popular", "trusted", "industry standard")
 4. key_features: What features/benefits were highlighted as important?
-5. sources_cited: Any sources, websites, or references mentioned
+5. sources_cited: Extract ALL sources and references, including:
+   - Explicit URLs or website mentions (e.g., "investopedia.com", "https://...")
+   - Named products/platforms/tools (e.g., "iShares", "Aladdin platform", "Russell Indices")
+   - Industry reports or indices mentioned (e.g., "S&P 500", "Russell 2000")
+   - Specific data sources or statistics cited (e.g., "according to...", "data from...")
+   - Publications or media outlets referenced (e.g., "Forbes", "Wall Street Journal")
+   - Research firms or rating agencies (e.g., "Morningstar", "Moody's")
+   - Any parenthetical citations or footnotes
+   IMPORTANT: Include ANY named entity that serves as a source of information or authority
 6. ranking_factors: What seems to determine the order/prominence of mentions?
 7. sentiment: Overall sentiment toward mentioned entities (positive/neutral/negative)
 8. optimization_insights: Specific actionable tips for AISEO based on this response
@@ -73,7 +81,7 @@ Provider: {provider}
 Response to analyze:
 {response_str}
 
-Return ONLY valid JSON with these exact keys. Be specific and actionable in optimization_insights."""
+Return ONLY valid JSON with these exact keys. For sources_cited, be comprehensive - extract anything that could be considered a source, reference, or authoritative mention. Be specific and actionable in optimization_insights."""
         
         try:
             # Use OpenAI to analyze
@@ -136,6 +144,9 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
                 if field not in analysis:
                     analysis[field] = default
             
+            # Post-process sources_cited to extract additional patterns
+            analysis['sources_cited'] = self._extract_additional_sources(response_str, analysis.get('sources_cited', []))
+            
             # Add metadata
             analysis['timestamp'] = datetime.now().isoformat()
             analysis['query'] = query
@@ -147,11 +158,77 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
             print(f"[ERROR] Analysis failed for {provider}: {e}")
             return self._get_fallback_analysis(response_str, query, provider)
     
+    def _extract_additional_sources(self, response_text, existing_sources):
+        """Extract additional sources from response text that may have been missed"""
+        
+        response_str = response_text if isinstance(response_text, str) else str(response_text)
+        text_lower = response_str.lower()
+        
+        # Start with existing sources
+        all_sources = list(existing_sources) if existing_sources else []
+        
+        # Look for specific patterns that indicate sources
+        patterns_to_extract = [
+            # Product/Platform mentions with indicators
+            (r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:platform|index|indices|ETF|ETFs|fund|funds)\b', True),
+            # Parenthetical mentions (often sources)
+            (r'\(([^)]+(?:Index|Indices|Platform|System|ETF|Fund)[^)]*)\)', False),
+            # "Known for" pattern often mentions products/tools
+            (r'known for (?:its |their )?([A-Z][^,\.\n]+)', False),
+            # Specific product patterns
+            (r'\b(i[A-Z][a-zA-Z]+)\b', False),  # iShares, iPhone, etc.
+            (r'\b([A-Z]+[a-z]*\s+\d+)\b', False),  # S&P 500, Russell 2000, etc.
+        ]
+        
+        for pattern, check_length in patterns_to_extract:
+            matches = re.findall(pattern, response_str)
+            for match in matches:
+                if check_length and len(match) > 2:
+                    all_sources.append(match.strip())
+                elif not check_length:
+                    all_sources.append(match.strip())
+        
+        # Check for specific known sources/platforms
+        known_items = [
+            'Aladdin', 'iShares', 'SPDR', 'Russell Indices', 'Russell 2000', 'Russell 3000',
+            'S&P 500', 'S&P Global', 'Dow Jones', 'NASDAQ', 'NYSE', 'FTSE',
+            'Morningstar', 'Bloomberg Terminal', 'Reuters', 'FactSet', 'Refinitiv',
+            'MSCI', 'Lipper', 'Barclays Indices', 'ICE Data', 'CRSP',
+            'Schwab Intelligent Portfolios', 'Vanguard Personal Advisor Services',
+            'ETF.com', 'Investopedia', 'SEC filings', 'EDGAR database'
+        ]
+        
+        for item in known_items:
+            if item.lower() in text_lower and item not in all_sources:
+                all_sources.append(item)
+        
+        # Extract URLs if not already included
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+'
+        urls = re.findall(url_pattern, response_str)
+        all_sources.extend([url for url in urls if url not in all_sources])
+        
+        # Clean up and deduplicate
+        cleaned_sources = []
+        seen = set()
+        for source in all_sources:
+            # Clean the source
+            source = source.strip()
+            # Skip very short or very long sources (likely noise)
+            if 2 < len(source) < 100:
+                # Normalize for deduplication
+                normalized = source.lower()
+                if normalized not in seen:
+                    seen.add(normalized)
+                    cleaned_sources.append(source)
+        
+        return cleaned_sources[:30]  # Limit to 30 most relevant sources
+    
     def _get_fallback_analysis(self, response_text, query, provider):
         """Basic analysis without AI when API fails"""
         
         # Simple pattern matching for companies and keywords
         text_lower = response_text.lower() if isinstance(response_text, str) else str(response_text).lower()
+        response_str = response_text if isinstance(response_text, str) else str(response_text)
         
         # Common company patterns
         companies = []
@@ -161,7 +238,7 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
         ]
         
         for pattern in company_patterns:
-            matches = re.findall(pattern, response_text if isinstance(response_text, str) else str(response_text))
+            matches = re.findall(pattern, response_str)
             companies.extend(matches[:5])  # Limit to avoid noise
         
         # Authority signals
@@ -171,6 +248,47 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
             if word in text_lower:
                 authority_signals.append(word)
         
+        # Enhanced source extraction
+        sources_cited = []
+        
+        # Extract URLs
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+'
+        urls = re.findall(url_pattern, response_str)
+        sources_cited.extend(urls)
+        
+        # Extract citations patterns
+        citation_patterns = [
+            r'according to ([A-Z][^,\.\n]+)',  # "according to X"
+            r'data from ([A-Z][^,\.\n]+)',  # "data from X"
+            r'reported by ([A-Z][^,\.\n]+)',  # "reported by X"
+            r'source: ([^,\.\n]+)',  # "source: X"
+            r'\(([A-Z][^)]+)\)',  # Parenthetical citations
+        ]
+        
+        for pattern in citation_patterns:
+            matches = re.findall(pattern, response_str, re.IGNORECASE)
+            sources_cited.extend([m.strip() for m in matches if len(m.strip()) > 3])
+        
+        # Extract known indices and platforms
+        known_sources = [
+            'Russell Indices', 'S&P 500', 'Dow Jones', 'NASDAQ', 'NYSE',
+            'Morningstar', 'Bloomberg', 'Reuters', 'Forbes', 'Wall Street Journal',
+            'Financial Times', 'Barron\'s', 'CNBC', 'Yahoo Finance',
+            'iShares', 'SPDR', 'Aladdin', 'FactSet', 'Refinitiv'
+        ]
+        
+        for source in known_sources:
+            if source.lower() in text_lower:
+                sources_cited.append(source)
+        
+        # Extract platform/tool mentions with specific patterns
+        platform_pattern = r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:platform|system|tool|index|indices|ETF|ETFs)\b'
+        platform_matches = re.findall(platform_pattern, response_str)
+        sources_cited.extend([m for m in platform_matches if len(m) > 2])
+        
+        # Remove duplicates and clean up
+        sources_cited = list(set([s for s in sources_cited if s and len(s.strip()) > 2]))[:20]
+        
         return {
             'timestamp': datetime.now().isoformat(),
             'query': query,
@@ -179,7 +297,7 @@ Return ONLY valid JSON with these exact keys. Be specific and actionable in opti
             'mention_reasons': {'extracted': 'Fallback analysis - AI unavailable'},
             'authority_signals': authority_signals,
             'key_features': [],
-            'sources_cited': [],
+            'sources_cited': sources_cited,
             'ranking_factors': 'Analysis unavailable',
             'sentiment': 'neutral',
             'optimization_insights': 'AI analysis unavailable - manual review recommended'

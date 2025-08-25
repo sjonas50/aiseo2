@@ -12,8 +12,14 @@ cd AI-multi-query
 # Install dependencies
 pip3 install -r requirements.txt
 
-# Run the script
-python3 query.py
+# Run with interactive mode
+python3 run.py
+
+# Or run all standard questions
+python3 run.py --batch
+
+# Or run a specific query
+python3 run.py --query "What are the best ETFs?"
 ```
 
 ## Features
@@ -24,10 +30,21 @@ python3 query.py
 - Detailed error reporting
 - JSON output for further analysis
 - Support for custom model configurations
+- **Multiple Query Modes** (run.py):
+  - Interactive single query mode
+  - Command-line query mode
+  - Batch processing for multiple questions
+  - Interactive selection from question list
+  - Custom questions file support
+- **Organized Results**:
+  - Results saved in dedicated `results/` directory
+  - Descriptive filenames based on query content
+  - Batch summaries for multi-query runs
 - **AI-Powered Response Analysis** (run.py only):
   - Analyzes LLM responses for AISEO optimization insights
   - Extracts companies mentioned and reasons why
   - Identifies authority signals and key features
+  - Enhanced source citation extraction
   - Provides actionable optimization recommendations
   - Saves analysis to CSV for pattern tracking over time
 
@@ -138,15 +155,100 @@ Run the script using python3:
 python3 query.py
 ```
 
-### With AI Analysis (run.py)
-For AISEO insights and response analysis:
+### Enhanced Testing with Multiple Query Modes (run.py)
+
+The `run.py` script supports multiple ways to run queries:
+
+#### 1. Interactive Mode (Default)
 ```bash
 python3 run.py
+# You'll be prompted to enter a query
 ```
 
-You'll be prompted to enter a test prompt, or press Enter to use the default prompt.
+#### 2. Single Query via Command Line
+```bash
+python3 run.py --query "What are the best ETFs for retirement?"
+# Or short form:
+python3 run.py -q "What are the best ETFs for retirement?"
+```
+
+#### 3. Batch Mode - Run All Questions from File
+```bash
+python3 run.py --batch
+# Or short form:
+python3 run.py -b
+
+# Use a custom questions file:
+python3 run.py --batch --file my_questions.txt
+```
+
+#### 4. Select Mode - Choose from Question List
+```bash
+python3 run.py --select
+# Or short form:
+python3 run.py -s
+
+# Shows numbered list of questions to choose from
+```
+
+#### View Available Options
+```bash
+python3 run.py --help
+```
 
 **Note:** Always use `python3` to ensure you're using Python 3.x, as some systems may have Python 2.x as the default `python` command.
+
+### Questions File Format
+
+Create a `questions.txt` file with one question per line:
+```
+How to find a financial advisor?
+Do I need a financial advisor?
+How to choose a financial advisor?
+what are the top investment advisory companies?
+```
+
+The script will automatically load questions from this file when using `--batch` or `--select` modes.
+
+### Example Usage Scenarios
+
+#### Running Standard Financial Advisor Questions
+```bash
+# Run all 6 standard questions automatically
+python3 run.py --batch
+
+# Output:
+# Batch mode: Running 6 questions from questions.txt
+# [1/6] Processing query...
+# Query: How to find a financial advisor?
+# ...results...
+# [2/6] Processing query...
+# Query: Do I need a financial advisor?
+# ...results...
+```
+
+#### Selecting Specific Questions
+```bash
+python3 run.py --select
+
+# Shows:
+# Available questions:
+# 1. How to find a financial advisor?
+# 2. Do I need a financial advisor?
+# 3. How to choose a financial advisor?
+# 4. How to find a good financial advisor?
+# 5. who are the top investment advisory companies?
+# 6. what are the top financial advisory firms?
+# 7. Run all questions
+# 8. Enter custom question
+# 
+# Select question number (or 'q' to quit): 5
+```
+
+#### Custom Query
+```bash
+python3 run.py --query "What are the advantages of index funds over mutual funds?"
+```
 
 ### Example Output
 
@@ -161,31 +263,54 @@ Testing LLM APIs...
 ----------------------------------------
 SUCCESS: Response received
 Model: gpt-4o-mini
-Response preview: 2 + 2 equals 4...
+Response preview: Index funds offer several advantages...
 
 [Anthropic]
 ----------------------------------------
 SUCCESS: Response received
 Model: claude-3-5-sonnet-20241022
-Response preview: 2 + 2 equals 4...
+Response preview: Index funds have multiple benefits...
 
 ============================================================
 SUMMARY
 ============================================================
-[OK] Successful: 2 providers
+[OK] Successful: 4 providers
 [ERROR] Failed: 0 providers
 
-Results saved to: llm_test_results_20250821_132836.json
+Results saved to: results/llm_results_what_are_the_advantages_of_index_funds_20250824_154732.json
 ```
 
 ## Output
 
-The script generates timestamped JSON files containing:
+### File Organization (run.py)
+
+When using `run.py`, results are organized in the `results/` directory:
+
+- **Individual Query Results**: `results/llm_results_[question_slug]_[timestamp].json`
+  - Example: `results/llm_results_how_to_find_a_financial_advisor_20250824_143022.json`
+  
+- **Batch Summary** (when using `--batch`): `results/batch_summary_[timestamp].json`
+  - Contains all queries and their results in a single file
+  
+- **Analysis CSV**: `analysis_results.csv` (when `ANALYZE_RESPONSES=true`)
+  - Cumulative file tracking all AISEO insights over time
+
+### Legacy Output (query.py)
+
+The original `query.py` script saves results in the root directory:
+- Format: `llm_test_results_[timestamp].json`
+
+### JSON File Contents
+
+Each result file contains:
+- Query text
+- Timestamp information
 - Provider name
 - Response text (if successful)
 - Model used
 - Error details (if failed)
 - Success status
+- Analysis data (run.py with ANALYZE_RESPONSES=true)
 
 ## Output Features
 
